@@ -78,15 +78,12 @@ else
 fi
 ok "geoip 数据库已就位"
 
-for f in profile-foreign-node.yaml profile-cn-node.yaml; do
-  cp "$SRC/$f" "$ROOT/$f" 2>/dev/null || die "安装包不完整：缺少 $f" "请重新解压完整的安装包后再运行。"
-done
+cp "$SRC/config.yaml" "$ROOT/config.yaml" 2>/dev/null || die "安装包不完整：缺少 config.yaml" "请重新解压完整的安装包后再运行。"
 if [ -f "$ROOT/cn-domains.yaml" ]; then
   warn "保留你已有的国内网站清单（cn-domains.yaml）"
 else
   cp "$SRC/cn-domains.yaml" "$ROOT/cn-domains.yaml" || die "安装包不完整：缺少 cn-domains.yaml"
 fi
-ln -sfh profile-foreign-node.yaml "$ROOT/config.yaml"
 cp "$SRC/scripts/proxy-guard.sh" "$ROOT/scripts/proxy-guard.sh" || die "安装包不完整：缺少 proxy-guard.sh"
 chmod +x "$ROOT/scripts/proxy-guard.sh"
 cp "$SRC/bin/veee-split" "$HOME/.local/bin/veee-split" || die "安装包不完整：缺少 veee-split"
@@ -126,20 +123,16 @@ until listening 7890; do
 done
 ok "mihomo :7890 就绪"
 
-step "接管系统代理并选择分流模式"
+step "接管系统代理"
 /bin/bash "$ROOT/scripts/proxy-guard.sh"
-mode="$(readlink "$ROOT/config.yaml" 2>/dev/null)"
-case "$mode" in
-  profile-cn-node.yaml) ok "当前：国内节点模式（国内走 Veee，其余直连）" ;;
-  *)                    ok "当前：海外节点模式（国内直连，其余走 Veee）" ;;
-esac
+ok "系统代理 → 127.0.0.1:7890（国内直连，其余走 Veee）"
 
 step "连通性测试"
 code=$(curl -sm 8 -o /dev/null -w '%{http_code}' -x http://127.0.0.1:7890 https://www.google.com/robots.txt 2>/dev/null)
 if [ "$code" = "200" ]; then
   ok "google 可访问"
 else
-  warn "google 测试失败（$code）— Veee 挂国内节点时这是正常现象"
+  warn "google 测试失败（$code）— 检查 Veee 是否联网正常"
 fi
 code=$(curl -sm 8 -o /dev/null -w '%{http_code}' -x http://127.0.0.1:7890 https://www.baidu.com 2>/dev/null)
 case "$code" in
@@ -151,11 +144,11 @@ printf '\n%s══════════ 安装完成 ════════
 cat <<'EOF'
 
 以后什么都不用做：
-  · 在 Veee 里随便切节点（美国 / 新加坡 / 台湾 / 国内），分流自动跟着调整
-  · 挂海外节点：国内网站自动直连（快），其余走 Veee
-  · 挂国内节点：国内网站自动走 Veee（拿国内 IP），其余直连
+  · 国内网站自动直连（快、用国内 IP），其余走 Veee
+  · 在 Veee 里随便切节点（美国 / 新加坡 / 台湾），代理被 Veee 抢走会自动抢回
   · 关掉 Veee：自动恢复全部直连
 
+想加直连的国内网站：让你的 Claude 帮你，或运行 veee-split add-direct 网站域名
 遇到问题：打开「终端」，输入 veee-split 回车，把输出发给你的 Claude。
 EOF
 finish_prompt

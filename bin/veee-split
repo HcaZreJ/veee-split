@@ -29,12 +29,8 @@ cmd_status() {
     warn "Veee 离线 — 系统代理应处于关闭状态，全部直连"
   fi
   if listening 7890; then
-    mode="$(readlink "$ROOT/config.yaml" 2>/dev/null)"
-    case "$mode" in
-      profile-foreign-node.yaml) mode="海外节点模式（国内直连，其余走 Veee）" ;;
-      profile-cn-node.yaml)      mode="国内节点模式（国内走 Veee，其余直连）" ;;
-    esac
-    ok "mihomo 分流运行中 — $mode"
+    n="$(grep -c "^  - '" "$ROOT/cn-domains.yaml" 2>/dev/null)"
+    ok "mihomo 分流运行中（国内清单 ${n:-?} 条直连，其余走 Veee）"
   else
     warn "mihomo 未运行"
   fi
@@ -56,7 +52,7 @@ cmd_reload() {
   # mihomo -t 不校验 rule-provider 文件（运行时才加载），坏 YAML 会让服务起不来，
   # 所以先用系统 ruby 把每个 yaml 都过一遍。
   if command -v ruby >/dev/null 2>&1; then
-    for f in cn-domains.yaml profile-foreign-node.yaml profile-cn-node.yaml; do
+    for f in cn-domains.yaml config.yaml; do
       if ! ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$ROOT/$f" >/dev/null 2>&1; then
         err "$f 不是合法的 YAML，未重启服务。改回上一版或修好后再 reload。"
         return 1
@@ -111,7 +107,6 @@ case "${1:-status}" in
     ;;
   doctor)
     echo "== 版本 =="; "$ROOT/bin/mihomo" -v 2>/dev/null | head -1
-    echo "== 分流模式 =="; readlink "$ROOT/config.yaml"
     echo "== 端口 =="
     printf "mihomo :7890  "; listening 7890 && echo UP || echo DOWN
     printf "Veee   :15236 "; listening 15236 && echo UP || echo DOWN

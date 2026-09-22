@@ -1,10 +1,9 @@
 #!/bin/bash
-# 让系统代理始终指向 mihomo(:7890)，并按 Veee 出口地区自动选分流模式。
+# 让系统代理始终指向 mihomo(:7890)。
 # launchd 在系统网络配置变化时调用（Veee 连接/切节点/断开都会改写系统代理），
 # 另有 45 秒定时兜底。
-#   Veee 在线，出口在海外 → profile-foreign-node（国内直连、其余走 Veee）
-#   Veee 在线，出口在国内 → profile-cn-node（国内走 Veee、其余直连）
-#   Veee 离线            → 关闭系统代理（全部直连）
+#   Veee 在线 → 系统代理 = 127.0.0.1:7890（mihomo 分流：国内直连，其余走 Veee）
+#   Veee 离线 → 关闭系统代理（全部直连）
 # ~/.veee-split/paused 存在时不做任何事（由 veee-split pause / resume 控制）。
 
 ROOT="$HOME/.veee-split"
@@ -45,18 +44,6 @@ if ! listening "$VEEE_PORT" && pgrep -x Veee >/dev/null 2>&1; then
 fi
 
 if listening "$VEEE_PORT"; then
-  # 探测 Veee 出口国家，决定分流模式
-  country="$(curl -sm 4 -x "http://127.0.0.1:$VEEE_PORT" https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null | sed -n 's/^loc=//p')"
-  [ -z "$country" ] && country="$(curl -sm 4 -x "http://127.0.0.1:$VEEE_PORT" https://ipinfo.io/country 2>/dev/null | tr -d '[:space:]')"
-  want_profile="profile-foreign-node.yaml"
-  [ "$country" = "CN" ] && want_profile="profile-cn-node.yaml"
-  current_profile="$(readlink "$ROOT/config.yaml" 2>/dev/null)"
-  if [ -n "$country" ] && [ "$current_profile" != "$want_profile" ]; then
-    ln -sfh "$want_profile" "$ROOT/config.yaml"
-    launchctl kickstart -k "gui/$(id -u)/$MIHOMO_LABEL" 2>>"$LOG"
-    log "Veee 出口=$country → 分流模式切到 $want_profile"
-  fi
-
   if ! listening "$MIHOMO_PORT"; then
     launchctl kickstart -k "gui/$(id -u)/$MIHOMO_LABEL" 2>>"$LOG"
   fi

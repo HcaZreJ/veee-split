@@ -1,7 +1,5 @@
 # 国内网站清单（mihomo rule-provider，behavior: domain）。
-# 两个分流模式共用这一份：
-#   海外节点模式 → 这些域名直连
-#   国内节点模式 → 这些域名走 Veee（拿国内 IP）
+# 清单里的域名不走 Veee、直接连接（国内 IP 访问、速度快），其余流量都走 Veee。
 # 想添加网站：在 payload 末尾加一行  - '+.网站域名'  （+. 表示含所有子域名），
 # 然后运行 veee-split reload 生效。所有 .cn 结尾的域名已被 '+.cn' 覆盖，无需单独添加。
 payload:
