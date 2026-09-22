@@ -95,6 +95,14 @@ chmod +x "$ROOT/scripts/proxy-guard.sh"
 fetch "CLAUDE.md" "$ROOT/CLAUDE.md" || die "获取 CLAUDE.md 失败"
 fetch "bin/veee-split" "$HOME/.local/bin/veee-split" || die "获取 veee-split 失败"
 chmod +x "$HOME/.local/bin/veee-split"
+
+# 挂进 Claude Code 的全局记忆：以后任何新会话天然认识本工具，
+# 用户直接说「帮我把 xxx 加到国内直连」即可。
+GCM="$HOME/.claude/CLAUDE.md"
+mkdir -p "$HOME/.claude"
+if ! grep -qs 'veee-split/CLAUDE.md' "$GCM"; then
+  printf '\n# veee-split（安装器自动添加，卸载器会移除）\n@~/.veee-split/CLAUDE.md\n' >> "$GCM"
+fi
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
   *) grep -qs 'local/bin' "$HOME/.zprofile" 2>/dev/null \

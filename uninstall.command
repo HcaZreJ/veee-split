@@ -18,5 +18,10 @@ done
 rm -rf "$HOME/.veee-split"
 rm -f "$HOME/.local/bin/veee-split"
 
+GCM="$HOME/.claude/CLAUDE.md"
+if [ -f "$GCM" ]; then
+  sed -i '' '/# veee-split（安装器自动添加，卸载器会移除）/d; /@~\/\.veee-split\/CLAUDE\.md/d' "$GCM"
+fi
+
 echo "✓ 已卸载。在 Veee 里重新连接一次节点，即回到 Veee 自带的全局模式。"
 if [ -t 0 ]; then printf '按回车键关闭窗口…'; read -r; fi
