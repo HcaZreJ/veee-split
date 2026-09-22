@@ -1,0 +1,48 @@
+# 海外节点模式：Veee 挂美国/新加坡/台湾等海外节点时用。
+# 国内网站直连（不绕路、速度快），其余全部走 Veee。
+# 守护脚本按 Veee 出口国家自动在两个模式间切换，无需手动选择。
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+
+proxies:
+  - name: Veee
+    type: http
+    server: 127.0.0.1
+    port: 15236
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - Veee
+      - DIRECT
+
+rule-providers:
+  cn-sites:
+    type: file
+    behavior: domain
+    path: ./cn-domains.yaml
+
+rules:
+  - DOMAIN-SUFFIX,local,DIRECT
+  - DOMAIN-SUFFIX,localhost,DIRECT
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+
+  # 国内 DNS 可能把 www.linkedin.com CNAME 到 linkedin.cn，
+  # 抢在国内直连规则之前强制走 Veee。
+  - DOMAIN-SUFFIX,linkedin.com,PROXY
+  - DOMAIN-SUFFIX,licdn.com,PROXY
+
+  - RULE-SET,cn-sites,DIRECT
+  - DOMAIN-REGEX,^cn\..+,DIRECT
+
+  # 兜底：清单没列到的域名，按解析出的 IP 归属地判定，国内 IP 直连。
+  - GEOIP,CN,DIRECT
+
+  - MATCH,PROXY

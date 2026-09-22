@@ -1,0 +1,139 @@
+#!/bin/bash
+# veee-split — Veee 分流助手命令行。
+# 日常使用不需要它：节点切换在 Veee 里点，分流模式与系统代理全自动跟随。
+# 这里的命令给排障和改配置用。
+
+ROOT="$HOME/.veee-split"
+UID_N="$(id -u)"
+
+listening() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+ok()   { printf '\033[32m✓\033[0m %s\n' "$1"; }
+warn() { printf '\033[33m!\033[0m %s\n' "$1"; }
+err()  { printf '\033[31m✗\033[0m %s\n' "$1"; }
+
+proxies_off() {
+  networksetup -listallnetworkservices 2>/dev/null | tail -n +2 | while IFS= read -r svc; do
+    case "$svc" in \**) continue ;; esac
+    networksetup -setwebproxystate "$svc" off
+    networksetup -setsecurewebproxystate "$svc" off
+    networksetup -setsocksfirewallproxystate "$svc" off
+  done
+}
+
+cmd_status() {
+  [ -f "$ROOT/paused" ] && warn "已暂停接管（恢复: veee-split resume）"
+  if listening 15236; then
+    c="$(curl -sm 4 -x http://127.0.0.1:15236 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null | sed -n 's/^loc=//p')"
+    ok "Veee 在线${c:+（出口: $c）}"
+  else
+    warn "Veee 离线 — 系统代理应处于关闭状态，全部直连"
+  fi
+  if listening 7890; then
+    mode="$(readlink "$ROOT/config.yaml" 2>/dev/null)"
+    case "$mode" in
+      profile-foreign-node.yaml) mode="海外节点模式（国内直连，其余走 Veee）" ;;
+      profile-cn-node.yaml)      mode="国内节点模式（国内走 Veee，其余直连）" ;;
+    esac
+    ok "mihomo 分流运行中 — $mode"
+  else
+    warn "mihomo 未运行"
+  fi
+  if networksetup -getwebproxy Wi-Fi 2>/dev/null | grep -q "Enabled: Yes"; then
+    ok "系统代理已接管（Wi-Fi → 127.0.0.1:7890）"
+  else
+    warn "系统代理未开启"
+  fi
+  code=$(curl -sm 6 -o /dev/null -w '%{http_code}' -x http://127.0.0.1:7890 https://www.google.com/robots.txt 2>/dev/null)
+  [ "$code" = "200" ] && ok "google 可访问（$code）" || warn "google 测试失败（$code）"
+  code=$(curl -sm 6 -o /dev/null -w '%{http_code}' -x http://127.0.0.1:7890 https://www.baidu.com 2>/dev/null)
+  case "$code" in
+    200|301|302) ok "baidu 可访问（$code）" ;;
+    *)           warn "baidu 测试失败（$code）" ;;
+  esac
+}
+
+cmd_reload() {
+  # mihomo -t 不校验 rule-provider 文件（运行时才加载），坏 YAML 会让服务起不来，
+  # 所以先用系统 ruby 把每个 yaml 都过一遍。
+  if command -v ruby >/dev/null 2>&1; then
+    for f in cn-domains.yaml profile-foreign-node.yaml profile-cn-node.yaml; do
+      if ! ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$ROOT/$f" >/dev/null 2>&1; then
+        err "$f 不是合法的 YAML，未重启服务。改回上一版或修好后再 reload。"
+        return 1
+      fi
+    done
+  fi
+  if ! "$ROOT/bin/mihomo" -d "$ROOT" -t >/dev/null 2>&1; then
+    err "配置有错误，未重载："
+    "$ROOT/bin/mihomo" -d "$ROOT" -t 2>&1 | tail -5
+    return 1
+  fi
+  launchctl kickstart -k "gui/$UID_N/local.veee-split.mihomo"
+  # launchd 对频繁重启有约 10 秒节流，等久一点
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    listening 7890 && { ok "配置已重载"; return 0; }
+    sleep 1
+  done
+  err "mihomo 重启后未监听 7890，查看日志: veee-split doctor"
+  return 1
+}
+
+cmd_add_direct() {
+  d="$1"
+  [ -z "$d" ] && { err "用法: veee-split add-direct 网站域名（例: veee-split add-direct example.com）"; return 1; }
+  d="${d#http://}"; d="${d#https://}"; d="${d%%/*}"; d="${d#www.}"
+  if grep -q "'+\.$d'" "$ROOT/cn-domains.yaml"; then
+    ok "$d 已在清单里"
+    return 0
+  fi
+  printf "  - '+.%s'\n" "$d" >> "$ROOT/cn-domains.yaml"
+  ok "$d 已加入国内网站清单"
+  cmd_reload
+}
+
+case "${1:-status}" in
+  status)     cmd_status ;;
+  reload)     cmd_reload ;;
+  add-direct) cmd_add_direct "${2:-}" ;;
+  pause)
+    touch "$ROOT/paused"
+    proxies_off
+    ok "已暂停：系统代理已关闭，全部直连。恢复: veee-split resume"
+    ;;
+  resume)
+    rm -f "$ROOT/paused"
+    /bin/bash "$ROOT/scripts/proxy-guard.sh"
+    ok "已恢复接管"
+    cmd_status
+    ;;
+  log)
+    tail -30 "$ROOT/logs/guard.log" 2>/dev/null
+    ;;
+  doctor)
+    echo "== 版本 =="; "$ROOT/bin/mihomo" -v 2>/dev/null | head -1
+    echo "== 分流模式 =="; readlink "$ROOT/config.yaml"
+    echo "== 端口 =="
+    printf "mihomo :7890  "; listening 7890 && echo UP || echo DOWN
+    printf "Veee   :15236 "; listening 15236 && echo UP || echo DOWN
+    echo "== launchd =="
+    launchctl print "gui/$UID_N/local.veee-split.mihomo" 2>/dev/null | grep -E "state|last exit" | head -3
+    launchctl print "gui/$UID_N/local.veee-split.guard" 2>/dev/null | grep -E "state|last exit" | head -3
+    echo "== 系统代理（Wi-Fi）=="; networksetup -getwebproxy Wi-Fi
+    echo "== guard 最近日志 =="; tail -15 "$ROOT/logs/guard.log" 2>/dev/null
+    echo "== mihomo 最近日志 =="; tail -15 "$ROOT/logs/mihomo.log" 2>/dev/null
+    ;;
+  -h|--help|help)
+    cat <<'EOF'
+用法: veee-split <命令>
+  status            当前状态 + 连通性测试（默认命令）
+  add-direct <域名>  把一个国内网站加入分流清单并生效
+  reload            改过配置文件后重载
+  pause / resume    暂停 / 恢复对系统代理的接管
+  log / doctor      查看日志 / 完整体检
+EOF
+    ;;
+  *)
+    err "未知命令: $1（veee-split help 查看用法）"
+    exit 1
+    ;;
+esac

@@ -1,0 +1,43 @@
+# 国内节点模式：Veee 挂国内节点时用（为了让锁区服务看到国内 IP）。
+# 国内网站走 Veee（拿国内 IP），其余全部直连（不从国内绕路）。
+# 守护脚本按 Veee 出口国家自动在两个模式间切换，无需手动选择。
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+
+proxies:
+  - name: Veee
+    type: http
+    server: 127.0.0.1
+    port: 15236
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - Veee
+      - DIRECT
+
+rule-providers:
+  cn-sites:
+    type: file
+    behavior: domain
+    path: ./cn-domains.yaml
+
+rules:
+  - DOMAIN-SUFFIX,local,DIRECT
+  - DOMAIN-SUFFIX,localhost,DIRECT
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+
+  - RULE-SET,cn-sites,PROXY
+  - DOMAIN-REGEX,^cn\..+,PROXY
+
+  # 兜底：清单没列到的域名，按解析出的 IP 归属地判定，国内 IP 走 Veee。
+  - GEOIP,CN,PROXY
+
+  - MATCH,DIRECT
