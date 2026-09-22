@@ -8,18 +8,25 @@
 - 每次在 Veee 里切节点，代理设置会被 Veee 抢走 → 后台守护自动抢回来，全程无感
 - 哪些网站算「国内网站」由一份清单决定，你的 Claude 可以直接帮你加
 
-## 安装（一次性，约 1 分钟）
+## 安装（一次性，不用碰终端）
 
 1. 打开 Veee，登录，连接任意一个节点
-2. 打开「终端」（启动台里搜 terminal），把下面整行粘贴进去，回车：
+2. 打开 Claude（桌面版），把 [prompt-for-claude.md](prompt-for-claude.md) 里那一整段话复制粘贴发给它
+3. 接下来按你的 Claude 说的做——它会自己跑安装命令、然后问你常用哪些国内网站并全部配好
+
+你的 Claude 需要一个能执行终端命令的扩展才能替你安装；如果它还没有，那段话里也写了怎么教你用鼠标点几下装上。
+
+<details>
+<summary>会用终端的人的备用方式</summary>
+
+打开 Veee 连上节点后，在终端里运行：
 
 ```
 /bin/bash -c "$(curl -fsSL -x http://127.0.0.1:15236 https://raw.githubusercontent.com/HcaZreJ/veee-split/main/install.command)"
 ```
 
-3. 看到绿色的「安装完成」后，把窗口里那句「发给你的 Claude」的话原样发给你的 Claude，它会帮你把常用的国内网站都配好
-
-（拿到的是 zip 压缩包的话：解压后双击 `install.command` 也一样；被系统拦下就右键点它 → 打开 → 打开。）
+拿到的是 zip 压缩包的话：解压后双击 `install.command` 也一样；被系统拦下就右键点它 → 打开 → 打开。
+</details>
 
 ## 日常使用
 

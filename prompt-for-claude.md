@@ -1,0 +1,21 @@
+请帮我安装并配置「Veee 分流助手」。
+
+背景：我的 Mac 上装了 Veee+ VPN，开全局模式时国内网站会很慢甚至打不开。这个工具会在我电脑上装一个本地分流（mihomo）：国内网站自动直连（快、用国内 IP），其余流量走 Veee；Veee 每次切节点抢走系统代理时它会自动抢回。项目主页：https://github.com/HcaZreJ/veee-split ，装好后你的操作手册在 ~/.veee-split/CLAUDE.md。
+
+要求：全程由你执行命令，不要让我打开终端或输入任何命令；每一步用大白话告诉我你在做什么、结果是什么。
+
+第 1 步 · 确认你能执行终端命令
+- 你有能在我这台 Mac 上运行 shell / 终端命令的工具（比如 Desktop Commander 这类 MCP 扩展）→ 直接进第 2 步。
+- 没有 → 教我用鼠标点击装一个：打开 Claude 桌面版的 设置 → 扩展（Extensions / 连接器），搜索「Desktop Commander」（搜不到就搜 terminal 或 shell 类扩展），点安装并允许。装好后我会开一个新对话，再把这整段话发给你一次。
+
+第 2 步 · 检查 Veee 在线
+运行 `lsof -nP -iTCP:15236 -sTCP:LISTEN`。没有输出 = Veee 没连接，提醒我打开 Veee 并点击连接任意一个节点，然后重查，直到有输出。
+
+第 3 步 · 安装（命令要跑一到三分钟，等它自己结束）
+/bin/bash -c "$(curl -fsSL -x http://127.0.0.1:15236 https://raw.githubusercontent.com/HcaZreJ/veee-split/main/install.command)"
+输出全是绿色 ✓ 并以「安装完成」结尾即成功；出现红色 ✗ 就把原文用大白话解释给我，并按它给的提示处理后重试。
+
+第 4 步 · 配置
+读 ~/.veee-split/CLAUDE.md，按里面的「首次配置访谈」问我平时常用哪些必须国内访问的网站，帮我全部配好并验证，最后告诉我以后怎么找你加网站。
+
+以后我说「帮我把 xxx 网站加到国内直连」，你就按那份手册里的「域名族扩展」流程处理：不只加主域名，要把这个网站放视频、图片、接口用的一整族域名找齐加全，并用 veee-split trace 实测补漏。
