@@ -18,8 +18,19 @@ SRC="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
 ARCH="$(uname -m)"
 MIHOMO_VERSION="v1.19.25"
 VEEE_PROXY="http://127.0.0.1:15236"
+REPO_RAW="https://raw.githubusercontent.com/HcaZreJ/veee-split/main"
 UID_N="$(id -u)"
 LA="$HOME/Library/LaunchAgents"
+
+# 取一个包文件：本地包里有就用本地的（zip 双击场景），
+# 没有就从 GitHub 经 Veee 下载（curl 一行安装场景）。
+fetch() {
+  if [ -n "$SRC" ] && [ -f "$SRC/$1" ]; then
+    cp "$SRC/$1" "$2"
+  else
+    curl -fsSL --retry 3 -m 120 -x "$VEEE_PROXY" -o "$2" "$REPO_RAW/$1"
+  fi
+}
 
 printf '%s══════════ Veee 分流助手 · 安装 ══════════%s\n' "$BOLD" "$NC"
 
@@ -55,10 +66,10 @@ ok "端口可用"
 step "安装文件到 ~/.veee-split"
 mkdir -p "$ROOT/bin" "$ROOT/scripts" "$ROOT/logs" "$HOME/.local/bin" "$LA"
 
-if [ -n "$SRC" ] && [ -f "$SRC/assets/mihomo-darwin-$ARCH.gz" ]; then
-  gunzip -c "$SRC/assets/mihomo-darwin-$ARCH.gz" > "$ROOT/bin/mihomo" || die "解压 mihomo 失败"
+if fetch "assets/mihomo-darwin-$ARCH.gz" "$ROOT/bin/mihomo.gz" 2>/dev/null; then
+  gunzip -f "$ROOT/bin/mihomo.gz" || die "解压 mihomo 失败"
 else
-  warn "包内没有 $ARCH 架构的 mihomo，从 GitHub 下载…"
+  warn "仓库里没有 $ARCH 架构的 mihomo，从 MetaCubeX 官方下载…"
   url="https://github.com/MetaCubeX/mihomo/releases/download/$MIHOMO_VERSION/mihomo-darwin-$ARCH-$MIHOMO_VERSION.gz"
   curl -fL --retry 3 -m 300 -x "$VEEE_PROXY" -o "$ROOT/bin/mihomo.gz" "$url" \
     || die "下载 mihomo 失败" "确认 Veee 联网正常后重试。"
@@ -69,24 +80,20 @@ xattr -d com.apple.quarantine "$ROOT/bin/mihomo" 2>/dev/null
 "$ROOT/bin/mihomo" -v >/dev/null 2>&1 || die "mihomo 无法在本机运行（架构: $ARCH）"
 ok "mihomo 已就位（$("$ROOT/bin/mihomo" -v 2>/dev/null | head -1 | awk '{print $1, $2, $3}')）"
 
-if [ -n "$SRC" ] && [ -f "$SRC/assets/geoip.metadb" ]; then
-  cp "$SRC/assets/geoip.metadb" "$ROOT/geoip.metadb"
-else
-  curl -fL --retry 3 -m 300 -x "$VEEE_PROXY" -o "$ROOT/geoip.metadb" \
-    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb" \
-    || die "下载 geoip 数据库失败" "确认 Veee 联网正常后重试。"
-fi
+fetch "assets/geoip.metadb" "$ROOT/geoip.metadb" \
+  || die "下载 geoip 数据库失败" "确认 Veee 联网正常后重试。"
 ok "geoip 数据库已就位"
 
-cp "$SRC/config.yaml" "$ROOT/config.yaml" 2>/dev/null || die "安装包不完整：缺少 config.yaml" "请重新解压完整的安装包后再运行。"
+fetch "config.yaml" "$ROOT/config.yaml" || die "获取 config.yaml 失败"
 if [ -f "$ROOT/cn-domains.yaml" ]; then
   warn "保留你已有的国内网站清单（cn-domains.yaml）"
 else
-  cp "$SRC/cn-domains.yaml" "$ROOT/cn-domains.yaml" || die "安装包不完整：缺少 cn-domains.yaml"
+  fetch "cn-domains.yaml" "$ROOT/cn-domains.yaml" || die "获取 cn-domains.yaml 失败"
 fi
-cp "$SRC/scripts/proxy-guard.sh" "$ROOT/scripts/proxy-guard.sh" || die "安装包不完整：缺少 proxy-guard.sh"
+fetch "scripts/proxy-guard.sh" "$ROOT/scripts/proxy-guard.sh" || die "获取 proxy-guard.sh 失败"
 chmod +x "$ROOT/scripts/proxy-guard.sh"
-cp "$SRC/bin/veee-split" "$HOME/.local/bin/veee-split" || die "安装包不完整：缺少 veee-split"
+fetch "CLAUDE.md" "$ROOT/CLAUDE.md" || die "获取 CLAUDE.md 失败"
+fetch "bin/veee-split" "$HOME/.local/bin/veee-split" || die "获取 veee-split 失败"
 chmod +x "$HOME/.local/bin/veee-split"
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
@@ -104,10 +111,11 @@ ok "配置校验通过"
 
 step "登记后台服务（开机自动运行）"
 for name in mihomo guard; do
-  tpl="$SRC/launchd/local.veee-split.$name.plist"
+  tpl="$ROOT/launchd-$name.plist.tpl"
   plist="$LA/local.veee-split.$name.plist"
-  [ -f "$tpl" ] || die "安装包不完整：缺少 launchd/$name 模板"
+  fetch "launchd/local.veee-split.$name.plist" "$tpl" || die "获取 launchd/$name 模板失败"
   sed "s|__HOME__|$HOME|g" "$tpl" > "$plist"
+  rm -f "$tpl"
   plutil -lint "$plist" >/dev/null || die "生成的 $name 服务描述无效"
   launchctl bootout "gui/$UID_N/local.veee-split.$name" 2>/dev/null
   launchctl bootstrap "gui/$UID_N" "$plist" || die "加载 $name 后台服务失败"
@@ -148,7 +156,16 @@ cat <<'EOF'
   · 在 Veee 里随便切节点（美国 / 新加坡 / 台湾），代理被 Veee 抢走会自动抢回
   · 关掉 Veee：自动恢复全部直连
 
-想加直连的国内网站：让你的 Claude 帮你，或运行 veee-split add-direct 网站域名
+┌────────────────────────────────────────────────────────┐
+│  下一步：把下面这句话原样发给你的 Claude——            │
+│                                                        │
+│  请阅读 ~/.veee-split/CLAUDE.md，按里面的「首次配置    │
+│  访谈」帮我把常用的国内网站配置成直连。                │
+│                                                        │
+│  以后想加网站，直接对 Claude 说：                      │
+│  「帮我把 xxx 网站加到国内直连」                       │
+└────────────────────────────────────────────────────────┘
+
 遇到问题：打开「终端」，输入 veee-split 回车，把输出发给你的 Claude。
 EOF
 finish_prompt

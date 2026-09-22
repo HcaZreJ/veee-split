@@ -11,9 +11,15 @@
 ## 安装（一次性，约 1 分钟）
 
 1. 打开 Veee，登录，连接任意一个节点
-2. 双击 `install.command`
-   - 如果系统提示「无法打开」：右键点它 → 打开 → 打开
-3. 看到绿色的「安装完成」即可关掉窗口
+2. 打开「终端」（启动台里搜 terminal），把下面整行粘贴进去，回车：
+
+```
+/bin/bash -c "$(curl -fsSL -x http://127.0.0.1:15236 https://raw.githubusercontent.com/HcaZreJ/veee-split/main/install.command)"
+```
+
+3. 看到绿色的「安装完成」后，把窗口里那句「发给你的 Claude」的话原样发给你的 Claude，它会帮你把常用的国内网站都配好
+
+（拿到的是 zip 压缩包的话：解压后双击 `install.command` 也一样；被系统拦下就右键点它 → 打开 → 打开。）
 
 ## 日常使用
 
@@ -26,8 +32,11 @@
 
 ## 加「直连的国内网站」
 
-把这个文件夹给你的 Claude，说：「帮我把 xxx.com 加到国内清单」。
-或者自己打开终端输入：`veee-split add-direct 网站域名`
+对你的 Claude 说：**「帮我把 xxx 网站加到国内直连」**。
+
+你的 Claude 会读 `~/.veee-split/CLAUDE.md`，按里面的流程做——不只加主域名，还会把这个网站放视频、图片用的一整族域名都找齐加全（只加主域名的话内容还是卡）。
+
+也可以自己打开终端输入：`veee-split add-direct 网站域名`
 
 ## 出问题了
 

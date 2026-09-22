@@ -75,22 +75,45 @@ cmd_reload() {
 }
 
 cmd_add_direct() {
-  d="$1"
-  [ -z "$d" ] && { err "用法: veee-split add-direct 网站域名（例: veee-split add-direct example.com）"; return 1; }
-  d="${d#http://}"; d="${d#https://}"; d="${d%%/*}"; d="${d#www.}"
-  if grep -q "'+\.$d'" "$ROOT/cn-domains.yaml"; then
-    ok "$d 已在清单里"
-    return 0
-  fi
-  printf "  - '+.%s'\n" "$d" >> "$ROOT/cn-domains.yaml"
-  ok "$d 已加入国内网站清单"
-  cmd_reload
+  [ $# -eq 0 ] && { err "用法: veee-split add-direct 域名 [域名…]（例: veee-split add-direct douyin.com douyinvod.com）"; return 1; }
+  changed=0
+  for d in "$@"; do
+    d="${d#http://}"; d="${d#https://}"; d="${d%%/*}"; d="${d#www.}"
+    [ -z "$d" ] && continue
+    if grep -qF "'+.$d'" "$ROOT/cn-domains.yaml"; then
+      ok "$d 已在清单里"
+    else
+      printf "  - '+.%s'\n" "$d" >> "$ROOT/cn-domains.yaml"
+      ok "$d 已加入国内网站清单"
+      changed=1
+    fi
+  done
+  [ "$changed" = 1 ] && cmd_reload || return 0
+}
+
+# 实时记录一段时间内经过 mihomo 的域名及其走向，
+# 用来找出「某网站还有哪些相关域名在走 Veee、该补进直连清单」。
+cmd_trace() {
+  secs="${1:-30}"
+  LOGF="$ROOT/logs/mihomo.log"
+  [ -f "$LOGF" ] || { err "找不到 mihomo 日志"; return 1; }
+  off="$(stat -f%z "$LOGF" 2>/dev/null || echo 0)"
+  printf '▸ 记录 %s 秒。现在去打开 / 刷新你要测的网站或 App…\n' "$secs"
+  sleep "$secs"
+  seg="$(tail -c "+$((off+1))" "$LOGF")"
+  echo
+  echo "== 走 Veee 的域名（次数 域名）=="
+  echo "$seg" | sed -nE 's/.*--> ([^:]+):[0-9]+ match [^ ]+ using PROXY.*/\1/p' | sort | uniq -c | sort -rn | head -40
+  echo
+  echo "== 直连的域名（次数 域名）=="
+  echo "$seg" | sed -nE 's/.*--> ([^:]+):[0-9]+ match [^ ]+ using DIRECT.*/\1/p' | sort | uniq -c | sort -rn | head -20
 }
 
 case "${1:-status}" in
   status)     cmd_status ;;
   reload)     cmd_reload ;;
-  add-direct) cmd_add_direct "${2:-}" ;;
+  add-direct) shift; cmd_add_direct "$@" ;;
+  trace)      cmd_trace "${2:-30}" ;;
   pause)
     touch "$ROOT/paused"
     proxies_off
@@ -120,11 +143,12 @@ case "${1:-status}" in
   -h|--help|help)
     cat <<'EOF'
 用法: veee-split <命令>
-  status            当前状态 + 连通性测试（默认命令）
-  add-direct <域名>  把一个国内网站加入分流清单并生效
-  reload            改过配置文件后重载
-  pause / resume    暂停 / 恢复对系统代理的接管
-  log / doctor      查看日志 / 完整体检
+  status              当前状态 + 连通性测试（默认命令）
+  add-direct <域名…>  把国内网站（可多个）加入直连清单并生效
+  trace [秒数]        记录一段时间的真实流量，找出还在走 Veee 的相关域名
+  reload              改过配置文件后重载
+  pause / resume      暂停 / 恢复对系统代理的接管
+  log / doctor        查看日志 / 完整体检
 EOF
     ;;
   *)
